@@ -1,0 +1,47 @@
+version: "3"
+services:
+    keycloak:
+        image: quay.io/keycloak/keycloak:21.1.1
+        container_name: keycloak
+        command:
+            - start --auto-build --db postgres --hostname-strict-https false --hostname-strict false --proxy edge --http-enabled true --import-realm --spi-user-profile-legacy-user-profile-read-only-attributes *_RES_ACCESS_MODE
+        ports:
+            - 8080:8080
+        environment:
+            KC_DB_URL: 'jdbc:postgresql://keycloak-postgres:5432/${DB_DATABASE}'
+            KC_DB_USERNAME: '${DB_USERNAME}'
+            KC_DB_PASSWORD: '${DB_PASSWORD:-secret}'
+            KC_DB_SCHEMA: public
+            KC_FEATURES: preview
+            KEYCLOAK_ADMIN: admin
+            KEYCLOAK_ADMIN_PASSWORD: admin
+        depends_on:
+            keycloak-postgres:
+                condition: service_healthy
+        healthcheck:
+            test: [ "CMD", "curl", "-f", "http://0.0.0.0:8080/realms/master" ]
+            retries: 3
+            timeout: 5s
+        networks:
+            - keycloak
+    keycloak-postgres:
+        image: library/postgres:14
+        container_name: keycloak-postgres
+        restart: on-failure
+        volumes:
+            - keycloak-data:/var/lib/postgresql/data
+        environment:
+            PGPASSWORD: '${DB_PASSWORD:-secret}'
+            POSTGRES_DB: '${DB_DATABASE}'
+            POSTGRES_USER: '${DB_USERNAME}'
+            POSTGRES_PASSWORD: '${DB_PASSWORD:-secret}'
+        healthcheck:
+            test: ["CMD", "pg_isready", "-q", "-d", "${DB_DATABASE}", "-U", "${DB_USERNAME}"]
+            retries: 3
+            timeout: 5s
+        networks:
+            - keycloak
+networks:
+    keycloak:
+volumes:
+    keycloak-data:
